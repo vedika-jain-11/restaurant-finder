@@ -74,9 +74,10 @@ export function ChatInterface() {
       timestamp: new Date(),
     },
   ])
+  const [isLoading, setIsLoading] = useState(false)
 
-  const handleSendMessage = (content: string) => {
-    // Add user message
+  const handleSendMessage = async (content: string) => {
+    // Add user message to UI immediately
     const userMessage: Message = {
       id: Date.now().toString(),
       type: "user",
@@ -84,29 +85,73 @@ export function ChatInterface() {
       timestamp: new Date(),
     }
     setMessages((prev) => [...prev, userMessage])
+    setIsLoading(true)
 
-    // Simulate AI response with recommendations
-    setTimeout(() => {
+    try {
+      // Build conversation history from existing messages (before adding the new user message)
+      // This excludes the current message and recommendation messages
+      const conversationHistory = messages
+        .filter((msg) => msg.type === "user" || msg.type === "assistant")
+        .map((msg) => ({
+          role: msg.type === "user" ? ("user" as const) : ("assistant" as const),
+          content: msg.content,
+        }))
+
+      // Call API
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: content,
+          conversationHistory,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+
+      if (data.error) {
+        throw new Error(data.error)
+      }
+
+      // Add assistant message
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: "assistant",
-        content: "Great choice! Let me find some perfect matches for you.",
+        content: data.assistantMessage || "Let me find some perfect matches for you.",
         timestamp: new Date(),
       }
       setMessages((prev) => [...prev, assistantMessage])
 
-      // Add recommendations after a brief delay
-      setTimeout(() => {
+      // Add recommendations if available
+      if (data.restaurants && data.restaurants.length > 0) {
         const recommendationsMessage: Message = {
           id: (Date.now() + 2).toString(),
           type: "recommendations",
           content: "Here are my top recommendations:",
-          restaurants: DEMO_RESTAURANTS,
+          restaurants: data.restaurants,
           timestamp: new Date(),
         }
         setMessages((prev) => [...prev, recommendationsMessage])
-      }, 500)
-    }, 800)
+      }
+    } catch (error) {
+      console.error("Error sending message:", error)
+      // Add error message
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        type: "assistant",
+        content: `Sorry, I encountered an error: ${error instanceof Error ? error.message : "Unknown error"}. Please try again.`,
+        timestamp: new Date(),
+      }
+      setMessages((prev) => [...prev, errorMessage])
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -123,7 +168,7 @@ export function ChatInterface() {
       <ChatMessages messages={messages} />
 
       {/* Input */}
-      <ChatInput onSendMessage={handleSendMessage} />
+      <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} />
     </div>
   )
 }

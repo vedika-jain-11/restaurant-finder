@@ -59,7 +59,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-
+    console.log("Conversation history:", conversationHistory)
+    console.log("Message:", message)
     // Step 3: Extract preferences using OpenAI
     const preferences = await extractPreferences(message, conversationHistory)
     

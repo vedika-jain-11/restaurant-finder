@@ -7,23 +7,20 @@ import { Button } from "@/components/ui/button"
 import { SendHorizontal } from "lucide-react"
 
 interface ChatInputProps {
-  onSendMessage: (message: string) => void
+  onSendMessage: (message: string) => void | Promise<void>
+  isLoading?: boolean
 }
 
-export function ChatInput({ onSendMessage }: ChatInputProps) {
+export function ChatInput({ onSendMessage, isLoading = false }: ChatInputProps) {
   const [input, setInput] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!input.trim() || isLoading) return
 
-    setIsLoading(true)
-    onSendMessage(input)
+    const message = input.trim()
     setInput("")
-
-    // Simulate loading
-    setTimeout(() => setIsLoading(false), 2000)
+    await onSendMessage(message)
   }
 
   return (
