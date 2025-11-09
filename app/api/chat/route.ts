@@ -30,6 +30,7 @@ export interface ChatResponse {
   assistantMessage: string
   restaurants?: Restaurant[]
   error?: string
+  needsLocation?: boolean
 }
 
 export async function POST(request: NextRequest) {
@@ -66,13 +67,61 @@ export async function POST(request: NextRequest) {
     
     console.log("Extracted preferences:", preferences)
 
+    // Attempt to extract location from the current user message if OpenAI missed it
+    if (!preferences.location) {
+      const currentMessageLocation = extractLocationFromText(message)
+      if (currentMessageLocation) {
+        preferences.location = currentMessageLocation
+        preferences.needsLocation = false
+      }
+    }
+
+    // Attempt to use location from conversation history if still missing
+    if (!preferences.location) {
+      const historicalLocation = extractLocationFromHistory(conversationHistory)
+      if (historicalLocation) {
+        preferences.location = historicalLocation
+        preferences.needsLocation = false
+      }
+    }
+
+    // Handle "near me" or similar phrases by asking for a specific area
+    if (
+      preferences.location?.toLowerCase().includes("near me") ||
+      preferences.location?.toLowerCase().includes("nearby") ||
+      preferences.location?.toLowerCase().includes("around here")
+    ) {
+      return NextResponse.json({
+        assistantMessage:
+          "I'd love to help you find restaurants nearby! Could you please tell me which city or neighborhood you're in?",
+        needsLocation: true,
+      })
+    }
+
+    // Handle missing location
+    if (preferences.needsLocation || (!preferences.location && !preferences.coordinates)) {
+      const locationPrompt =
+        preferences.cuisine?.length
+          ? `I'd be happy to help you find ${preferences.cuisine.join(
+              ", "
+            )} restaurants! To give you the best recommendations, could you please tell me which city or neighborhood you're interested in? For example: "in Manhattan" or "around downtown Austin".`
+          : "To find the perfect restaurants for you, could you please tell me which city or neighborhood you're interested in? For example: \"in San Francisco\" or \"around downtown Austin\"."
+
+      return NextResponse.json({
+        assistantMessage: locationPrompt,
+        needsLocation: true,
+      })
+    }
+
     // TODO: Step 4 - Query Google Places API with preferences
     // TODO: Step 5 - Map Google Places data to Restaurant interface
     // TODO: Step 6 - Optional AI ranking
 
     // Temporary response for testing
     const response: ChatResponse = {
-      assistantMessage: `I understand you're looking for ${preferences.cuisine?.join(", ") || "restaurants"}${preferences.location ? ` in ${preferences.location}` : ""}. Let me find the perfect matches for you!`,
+      assistantMessage: `I understand you're looking for ${
+        preferences.cuisine?.join(", ") || "restaurants"
+      }${preferences.location ? ` in ${preferences.location}` : ""}. Let me find the perfect matches for you!`,
     }
 
     return NextResponse.json(response)
@@ -86,5 +135,28 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
+}
+
+function extractLocationFromHistory(
+  conversationHistory: Array<{ role: "user" | "assistant"; content: string }>
+): string | null {
+  for (let i = conversationHistory.length - 1; i >= 0; i--) {
+    const message = conversationHistory[i]
+    if (message.role !== "user") continue
+    const location = extractLocationFromText(message.content)
+    if (location) {
+      return location
+    }
+  }
+  return null
+}
+
+function extractLocationFromText(input: string): string | null {
+  const locationRegex = /\b(?:in|near|around|at)\s+([A-Za-z][A-Za-z\s'-]{2,})(?=$|[.,!?;]| with| for| on| to| and)/i
+  const match = input.match(locationRegex)
+  if (match) {
+    return match[1].trim()
+  }
+  return null
 }
 
