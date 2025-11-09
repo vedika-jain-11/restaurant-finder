@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import OpenAI from "openai"
-
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
+import { extractPreferences } from "@/lib/openai-client"
 
 // Google Places API endpoint
 const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY
@@ -65,14 +60,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // TODO: Step 3 - Extract preferences using OpenAI
-    // TODO: Step 4 - Query Google Places API
+    // Step 3: Extract preferences using OpenAI
+    const preferences = await extractPreferences(message, conversationHistory)
+    
+    console.log("Extracted preferences:", preferences)
+
+    // TODO: Step 4 - Query Google Places API with preferences
     // TODO: Step 5 - Map Google Places data to Restaurant interface
     // TODO: Step 6 - Optional AI ranking
 
     // Temporary response for testing
     const response: ChatResponse = {
-      assistantMessage: "I'm working on finding the perfect restaurants for you. This feature is being implemented.",
+      assistantMessage: `I understand you're looking for ${preferences.cuisine?.join(", ") || "restaurants"}${preferences.location ? ` in ${preferences.location}` : ""}. Let me find the perfect matches for you!`,
     }
 
     return NextResponse.json(response)
