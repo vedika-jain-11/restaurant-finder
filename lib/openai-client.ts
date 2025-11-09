@@ -16,6 +16,7 @@ export interface ExtractedPreferences {
   dietaryRestrictions?: string[]
   otherPreferences?: string[]
   searchQuery?: string
+  needsLocation?: boolean // Flag to indicate if location is needed
 }
 
 /**
@@ -34,16 +35,20 @@ export async function extractPreferences(
 
 Extract the following information:
 - cuisine: Array of cuisine types (e.g., ["Italian", "Japanese"])
-- location: City, neighborhood, or area name (e.g., "Manhattan", "San Francisco")
-- coordinates: If location can be geocoded, provide lat/lng (optional)
+- location: City, neighborhood, or area name (e.g., "Manhattan", "San Francisco", "downtown", "near me")
+- coordinates: If location can be geocoded, provide lat/lng (optional, only if specific coordinates are mentioned)
 - priceRange: One of "budget", "moderate", "expensive", "very expensive"
 - occasion: Special occasion or dining style (e.g., "romantic", "business dinner", "casual")
 - dietaryRestrictions: Any dietary restrictions (e.g., ["vegetarian", "gluten-free"])
 - otherPreferences: Any other preferences mentioned
 - searchQuery: A natural language search query for Google Places API based on the preferences
 
-Return a JSON object with the extracted preferences. If information is not mentioned, omit that field.
-Use conversation history to maintain context about previously mentioned preferences.`,
+IMPORTANT: 
+- If the user mentions "near me", "nearby", "around here", or similar phrases, set location to "near me" (coordinates will be handled separately)
+- If location is not mentioned at all, do NOT include it in the response (the system will ask for it)
+- Use conversation history to maintain context about previously mentioned preferences, including location
+
+Return a JSON object with the extracted preferences. If information is not mentioned, omit that field.`,
       },
       ...conversationHistory.map((msg) => ({
         role: msg.role,
@@ -70,8 +75,13 @@ Use conversation history to maintain context about previously mentioned preferen
     // Parse JSON response
     const preferences: ExtractedPreferences = JSON.parse(responseContent)
 
-    // Generate search query if not provided
-    if (!preferences.searchQuery) {
+    // Check if location is needed but not provided
+    if (!preferences.location && !preferences.coordinates) {
+      preferences.needsLocation = true
+    }
+
+    // Generate search query if not provided and location is available
+    if (!preferences.searchQuery && preferences.location) {
       preferences.searchQuery = generateSearchQuery(preferences)
     }
 
